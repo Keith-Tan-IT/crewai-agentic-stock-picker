@@ -37,15 +37,15 @@ class StockPicker():
 
     @agent
     def trending_company_finder(self) -> Agent:
-        return Agent(config=self.agents_config['trending_company_finder'], tools = [SerperDevTool()], max_iter=2, max_execution_time=60, max_retry_limit=2)
+        return Agent(config=self.agents_config['trending_company_finder'], tools = [SerperDevTool()], max_iter=3, max_execution_time=60, max_retry_limit=3)
         
     @agent
     def financial_researcher(self) -> Agent:
-        return Agent(config=self.agents_config['financial_researcher'], tools=[SerperDevTool()], max_iter=2, max_execution_time=60, max_retry_limit=2)
+        return Agent(config=self.agents_config['financial_researcher'], tools=[SerperDevTool()])
 
     @agent
     def stock_picker(self) -> Agent:
-        return Agent(config=self.agents_config['stock_picker'], max_iter=2, max_execution_time=60, max_retry_limit=2)
+        return Agent(config=self.agents_config['stock_picker'], max_iter=3, max_execution_time=60, max_retry_limit=3)
         
     @task
     def find_trending_companies(self) -> Task:
@@ -72,7 +72,7 @@ class StockPicker():
         
         manager = Agent(
             config=self.agents_config['manager'],
-            allow_delegation=True, max_iter=5, max_execution_time=90, max_retry_limit=2
+            allow_delegation=True, tools=[], max_iter=2, max_execution_time=90, max_retry_limit=3
         )
 
         return Crew(
@@ -81,5 +81,9 @@ class StockPicker():
             process=Process.hierarchical,
             verbose=True,
             manager_agent=manager,
-            max_execution_time=180
+            max_execution_time=180,
+            system_message="""
+            Delegate tasks carefully to the correct agent.
+            Stop once you have valid results.
+            """
         )

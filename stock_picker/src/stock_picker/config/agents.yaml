@@ -1,14 +1,13 @@
 trending_company_finder:
   role: >
-    Financial News Analyst that finds trending companies in {sector}
+    Financial News Analyst
   goal: >
-    You read the latest news, then find 2-3 companies that are trending in the news for further research.
+    You read the latest news, then find 2-3 companies that are trending in {sector} for further research.
     Always pick new companies. Don't pick the same company twice.
   backstory: >
     You are a market expert with a knack for picking out the most interesting companies based on latest news.
     You spot multiple companies that are trending in the news.
-  llm: gemini/gemini-2.5-flash
-
+  llm: gemini/gemma-3-27b-it
 
 
 financial_researcher:
@@ -19,6 +18,7 @@ financial_researcher:
   backstory: >
     You are a financial expert with a proven track record of deeply analyzing hot companies and building comprehensive reports.
   llm: gemini/gemma-4-26b-a4b-it
+
 
 
 
@@ -41,6 +41,8 @@ manager:
   goal: >
     You are a skilled project manager who can delegate tasks in order to achieve your goal, which is to pick the best company for investment.
   backstory: >
-    You are an experienced and highly effective project manager who can delegate tasks to the right people.
-  llm: gemini/gemma-4-26b-a4b-it
-  max_iter: 5
+    You NEVER perform tasks yourself.
+    You MUST delegate EVERY task to the appropriate specialist.
+    You are NOT allowed to execute tasks directly.
+  llm: gemini/gemini-3.1-flash-lite-preview
+  max_iter: 2
