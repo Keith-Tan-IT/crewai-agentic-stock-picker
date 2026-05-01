@@ -1,11 +1,13 @@
-from crewai import Agent, Crew, Process, Task, LLM
+from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
-from typing import List
-from pydantic import BaseModel, Field
 from crewai_tools import SerperDevTool
+from pydantic import BaseModel, Field
+from typing import List
+from .tools.push_tool import PushNotificationTool
+from crewai.memory import LongTermMemory, ShortTermMemory, EntityMemory
+from crewai.memory.storage.rag_storage import RAGStorage
+from crewai.memory.storage.ltm_sqlite_storage import LTMSQLiteStorage
 import os
-
-
 
 class TrendingCompany(BaseModel):
     """ A company that is in the news and attracting attention """
@@ -28,6 +30,7 @@ class TrendingCompanyResearchList(BaseModel):
     """ A list of detailed research on all the companies """
     research_list: List[TrendingCompanyResearch] = Field(description="Comprehensive research on all trending companies")
 
+
 @CrewBase
 class StockPicker():
     """StockPicker crew"""
@@ -37,26 +40,36 @@ class StockPicker():
 
     @agent
     def trending_company_finder(self) -> Agent:
-        return Agent(config=self.agents_config['trending_company_finder'], tools = [SerperDevTool()], max_iter=3, max_execution_time=60, max_retry_limit=3)
-        
+        return Agent(config=self.agents_config['trending_company_finder'],
+                     tools=[SerperDevTool()], memory=True, max_iter=1, max_execution_time=180, max_retry_limit=1, 
+                     enforce_output=True)
+    
     @agent
     def financial_researcher(self) -> Agent:
-        return Agent(config=self.agents_config['financial_researcher'], tools=[SerperDevTool()])
+        return Agent(config=self.agents_config['financial_researcher'], 
+                     tools=[SerperDevTool()], max_iter=1, max_execution_time=180, max_retry_limit=1, 
+                     enforce_output=True)
+    
 
     @agent
     def stock_picker(self) -> Agent:
-        return Agent(config=self.agents_config['stock_picker'], max_iter=3, max_execution_time=60, max_retry_limit=3)
-        
+        return Agent(config=self.agents_config['stock_picker'], 
+                     tools=[PushNotificationTool()], memory=True, max_iter=1, max_execution_time=180, max_retry_limit=1, 
+                     enforce_output=True)
+    
+    
     @task
     def find_trending_companies(self) -> Task:
         return Task(
-            config=self.tasks_config['find_trending_companies'], output_pydantic=TrendingCompanyList,
-            )
+            config=self.tasks_config['find_trending_companies'],
+            output_pydantic=TrendingCompanyList,
+        )
 
     @task
     def research_trending_companies(self) -> Task:
         return Task(
-            config=self.tasks_config['research_trending_companies'], output_pydantic=TrendingCompanyResearchList,
+            config=self.tasks_config['research_trending_companies'],
+            output_pydantic=TrendingCompanyResearchList,
         )
 
     @task
@@ -64,26 +77,71 @@ class StockPicker():
         return Task(
             config=self.tasks_config['pick_best_company'],
         )
-        
+    
+
+
 
     @crew
     def crew(self) -> Crew:
         """Creates the StockPicker crew"""
-        
+
         manager = Agent(
             config=self.agents_config['manager'],
-            allow_delegation=True, tools=[], max_iter=2, max_execution_time=90, max_retry_limit=3
-        )
+            allow_delegation=True,
+            max_iter=1,
+            max_execution_time=180,
+            max_retry_limit=1,
+            system_message="""
+        STRICT RULES:
+        - Delegate EXACTLY once per task
+        - NEVER delegate the same task twice
+        - NEVER delegate after receiving a result
+        - NEVER retry delegation
+        - If a tool fails, continue with available data
+        - Your role is to FINALIZE, not explore
 
+        If you already have output → return final answer immediately
+        """
+        )
+            
         return Crew(
-            agents=self.agents, # Automatically created by the @agent decorator
-            tasks=self.tasks, # Automatically created by the @task decorator
+            agents=self.agents,
+            tasks=self.tasks, 
             process=Process.hierarchical,
+            max_rpm=10,
             verbose=True,
             manager_agent=manager,
-            max_execution_time=180,
-            system_message="""
-            Delegate tasks carefully to the correct agent.
-            Stop once you have valid results.
-            """
+            memory=True,
+            max_execution_time=300,
+            # Long-term memory for persistent storage across sessions
+            long_term_memory = LongTermMemory(
+                storage=LTMSQLiteStorage(
+                    db_path="./memory/long_term_memory_storage.db"
+                )
+            ),
+            # Short-term memory for current context using RAG
+            short_term_memory = ShortTermMemory(
+                storage = RAGStorage(
+                    embedder_config={
+                        "provider": "sentence-transformer",
+                        "config": {
+                            "model_name": "all-MiniLM-L6-v2"
+                        }
+                    },
+                    type="short_term",
+                    path="./memory/"
+                    )
+                ),            # Entity memory for tracking key information about entities
+            entity_memory = EntityMemory(
+                storage=RAGStorage(
+                    embedder_config={
+                        "provider": "sentence-transformer",
+                        "config": {
+                            "model_name": "all-MiniLM-L6-v2"
+                        }
+                    },
+                    type="short_term",
+                    path="./memory/"
+                )
+            ),
         )
